@@ -125,7 +125,38 @@
   </head>
   <body
     class="bg-gradient-to-br from-amber-50 via-amber-100 to-orange-50 min-h-screen text-amber-900">
-      <div id="game-container" class="container mx-auto px-4 py-8">
+    <!-- Name Input Modal -->
+    <div
+      id="name-modal"
+      class="fixed inset-0 bg-amber-900/80 flex items-center justify-center z-50">
+      <div
+        class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl border border-amber-200">
+		
+		<div class="logo-placeholder">
+			<img src="logo_small.png" alt="Maliban Logo" class="w-full h-auto" />
+		</div>
+        <h2
+          class="text-2xl font-bold mb-4 text-center text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-600">
+          Welcome to Biscuit Wheel!
+        </h2>
+        <p class="text-amber-700 mb-6 text-center">
+          Please enter your name to start playing
+        </p>
+        <input
+          type="text"
+          id="modal-player-name"
+          placeholder="Your name"
+          class="w-full bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          autofocus />
+        <button
+          id="start-game-btn"
+          class="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transition">
+          Start Game
+        </button>
+      </div>
+    </div>
+
+    <div id="game-container" class="container mx-auto px-4 py-8 hidden">
       <div class="logo-placeholder">
         <img src="logo_small.png" alt="Maliban Logo" class="w-full h-auto" />
       </div>
@@ -151,11 +182,11 @@
         </div>
 
           <div class="mt-8 text-center">
-              <button
-                id="start-btn"
-                class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
-                START
-              </button>
+            <button
+              id="spin-btn"
+              class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+              SPIN THE BISCUIT
+            </button>
             <div class="mt-4 text-slate-300">
               <p id="result-message" class="text-lg font-semibold"></p>
             </div>
@@ -204,14 +235,22 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-          // Game elements
-          const wheel = document.getElementById('wheel');
-          const startBtn = document.getElementById('start-btn');
-          const resultMessage = document.getElementById('result-message');
-          const overlay = document.getElementById('wheel-overlay');
+      document.addEventListener('DOMContentLoaded', function () {
+        // Game elements
+        const nameModal = document.getElementById('name-modal');
+        const gameContainer = document.getElementById('game-container');
+        const modalNameInput = document.getElementById('modal-player-name');
+        const startGameBtn = document.getElementById('start-game-btn');
+        const wheel = document.getElementById('wheel');
+        const spinBtn = document.getElementById('spin-btn');
+        const resultMessage = document.getElementById('result-message');
+        const overlay = document.getElementById('wheel-overlay');
 
-          let isSpinning = false;
+        let isSpinning = false;
+        let playerName = '';
+
+        // Show modal on load
+        nameModal.classList.remove('hidden');
 
         // Prize sections with win probabilities
         const sections = [
@@ -272,20 +311,20 @@
           return sections.length - 1;
         }
 
-          function sendResult(winPrice) {
-            fetch('https://malibanscav.dev.artslabcreatives.com/api/spins', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ win_price: winPrice }),
-            }).catch((err) => console.error('Failed to send result', err));
-          }
+        function sendResult(data) {
+          fetch('https://malibanscav.dev.artslabcreatives.com/admin/spinwheel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          }).catch((err) => console.error('Failed to send result', err));
+        }
 
         function spinWheel() {
           if (isSpinning) return;
 
           isSpinning = true;
-            startBtn.disabled = true;
-            resultMessage.textContent = '';
+          spinBtn.disabled = true;
+          resultMessage.textContent = '';
 
           const winningIndex = chooseSection();
           const spins = 5 + Math.floor(Math.random() * 4);
@@ -296,8 +335,10 @@
           wheel.style.transform = `rotate(-${stopDeg}deg)`;
 
           setTimeout(() => {
-              isSpinning = false;
-              const winningSection = sections[winningIndex];
+            isSpinning = false;
+            spinBtn.disabled = false;
+
+            const winningSection = sections[winningIndex];
 
             if (winningSection.type === 'win') {
               resultMessage.textContent = `You won ${winningSection.text}!`;
@@ -311,19 +352,14 @@
               resultMessage.className = 'text-lg font-semibold text-red-400';
             }
 
-              sendResult(winningSection.text);
-
-              setTimeout(() => {
-                resultMessage.textContent = '';
-                wheel.style.transition = 'none';
-                wheel.style.transform = 'rotate(0deg)';
-                setTimeout(() => {
-                  wheel.style.transition = '';
-                  startBtn.disabled = false;
-                }, 50);
-              }, 3000);
-            }, 5000);
-          }
+            sendResult({
+              name: playerName,
+              result: winningSection.text,
+              type: winningSection.type,
+              timestamp: new Date().toISOString(),
+            });
+          }, 5000);
+        }
 
         function createConfetti() {
           const container = document.querySelector('.wheel-container');
@@ -361,8 +397,26 @@
           }
         }
 
-          startBtn.addEventListener('click', spinWheel);
+        startGameBtn.addEventListener('click', () => {
+          const name = modalNameInput.value.trim();
+          if (!name) {
+            alert('Please enter your name');
+            return;
+          }
+
+          playerName = name;
+          nameModal.classList.add('hidden');
+          gameContainer.classList.remove('hidden');
         });
+
+        modalNameInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            startGameBtn.click();
+          }
+        });
+
+        spinBtn.addEventListener('click', spinWheel);
+      });
     </script>
   </body>
 </html>
